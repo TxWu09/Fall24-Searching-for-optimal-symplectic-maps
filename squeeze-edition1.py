@@ -335,7 +335,7 @@ def main():
 		z_traj = tf.reshape(z_ph,[1,b,2*n]) 
 		shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
 		for m in range(num_macro_steps):
-			# First do G^2
+			# First do G2
 			G1 = compute_G(G1u_list[m], G1b_list[m])
 			z_ph = tf.matmul(z_ph, G1)
 
@@ -353,6 +353,12 @@ def main():
 			G2 = compute_G(G2u_list[m], G2b_list[m])
 			z = tf.matmul(z, G2)
 			z = z + Tc_list[m]
+
+			x = z[:,0:n]
+			y = z[:,n:2*n]
+			
+
+			
 
 
 
