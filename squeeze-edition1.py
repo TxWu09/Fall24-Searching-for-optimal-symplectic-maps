@@ -65,7 +65,7 @@ def main():
 	# The neural net parameters are defined within the model definition
 	#
 	n = 2 # half the total real dimension
-	domain = 'tori'
+	domain = 'ellipsoid'
 	Hamiltonian_type = 'b'
 
 ################################################################################
@@ -147,7 +147,7 @@ def main():
 		#The Hamiltonian is assumed to be of the form H(x,y) = F(x) + G(y).
 
 		# Neural net (width, depth, and activation function specified below)
-		if Hamiltonian_type == 'neural net':
+		elif Hamiltonian_type == 'neural net':
 
 			width = 50
 			#depth = 2 # broken for now, second-order gradient doesn't support loops
@@ -333,14 +333,15 @@ def main():
 ################################################################################
 
 		z_traj = tf.reshape(z_ph,[1,b,2*n]) 
-		shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
+		z = z_ph
+		# shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
 		for m in range(num_macro_steps):
 			# First do G2
 			G1 = compute_G(G1u_list[m], G1b_list[m])
-			z_ph = tf.matmul(z_ph, G1)
+			z = tf.matmul(z, G1)
 
-			x = z_ph[:,0:n]
-			y = z_ph[:,n:2*n]
+			x = z[:,0:n]
+			y = z[:,n:2*n]
 
 			S = compute_S(y, Sk_list[m])
 			dy = tf.gradients(S, y)[0]
