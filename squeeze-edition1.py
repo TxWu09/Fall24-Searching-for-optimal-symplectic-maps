@@ -30,11 +30,11 @@ def main():
 
 	# Gradient descent parameters
 	restore_session = False # Whether or not to recall the weights from the last training stage or re-initialize
-	num_epochs = 10000 # Number of epochs per script call
+	num_epochs = 1 # Number of epochs per script call
 	current_lr = 0.001 # Initial learning rate
 	decay_steps = 500 # Number of training steps before we decay the learning rate
 	decay_rate = 0.5 # Decay factor of the learning rate
-	num_samples_per_epoch_basic = 1000 # Number of random sample points to draw from the domain at each epoch
+	num_samples_per_epoch_basic = 10 # Number of random sample points to draw from the domain at each epoch
 	num_samples_per_epoch_check_accuracy = 5000 # Should be larger than num_samples_per_epoch_basic and is used to periodically assess the accuracy of the sampling process
 
 	# Time integration parameters
@@ -66,7 +66,7 @@ def main():
 	#
 	n = 2 # half the total real dimension
 	domain = 'ellipsoid'
-	Hamiltonian_type = 'b'
+	Hamiltonian_type = 'Week 4'
 
 ################################################################################
 # Define the Hamiltonian model form
@@ -85,7 +85,73 @@ def main():
 		dt = tf.reshape(1 / (num_macro_steps * tf.to_float(num_steps_ph)), [])
 
 
-		if Hamiltonian_type == 'b':
+		if Hamiltonian_type == 'Week 4':
+			depth = 2
+			num_macro_steps = 1
+			width = 2
+			num_G = 3
+			num_Sk = 1
+			num_Sv = 1
+			num_T = 1
+			num_Lfg = 1
+			n = 2
+			activation = tf.math.tanh
+			G_list = []
+			neural_list = []
+			Sk_list = []
+			Sv_list = []
+			T_list = []
+			Lfg_neural_list = []
+			for i in range(num_macro_steps):
+				
+
+				u= tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_G, 4, 1]), dtype=np.float32))
+				b= tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_G, 1]), dtype=np.float32))
+
+
+				c= tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_T, 1, 4]), dtype=np.float32))
+				
+				inputM = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Sk + num_Sv, 2, width]), dtype=np.float32))
+				inputBias = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Sk + num_Sv, 1, width]), dtype=np.float32))
+				for j in range(depth - 1):
+					w = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Sk + num_Sv, width, width]), dtype=np.float32))
+					Bias = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Sk + num_Sv, 1, width]), dtype=np.float32))
+					neural_list.append([w, Bias])
+					# Sk_list.append(w[])
+					# Sv_list = []
+					# Lfg_list = []
+				outputM = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Sk + num_Sv, width, 2]), dtype=np.float32))
+
+				inputML = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [2*num_Lfg, 1, width]), dtype=np.float32))
+				outputML = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [2*num_Lfg, width, 1]), dtype=np.float32))
+				for j in range(depth - 1): 
+					w = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [2*num_Lfg, width, width]), dtype=np.float32))
+					Bias = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [2*num_Lfg, 1, width]), dtype=np.float32))
+					Lfg_neural_list.append([w, Bias])
+
+				T_list.append(c)
+
+				def Compute_G(u, b):
+					I = tf.constant(np.identity(4), dtype=np.float32)
+					J = tf.constant([[0, 0, -1, 0], [0, 0, 0, -1], [1, 0, 0, 0], [0, 1, 0, 0]], dtype=np.float32)
+					output = tf.add(I ,tf.multiply(b, tf.matmul(u, tf.matmul(tf.transpose(u), J))))
+					return output
+				
+				def Compute_S(input_place, neural_list, inputM, outputM, i):
+					input_place = activation(tf.add(inputBias[i, :, :], tf.matmul(input_place, inputM[i, :, :])))
+					for j in range(depth - 1):
+						w, Bias = neural_list[j]
+						print(w)
+						print(Bias)
+						input_place = activation(tf.add(Bias[i, :, :], tf.matmul(input_place, w[i, :, :])))
+					output = tf.matmul(input_place, outputM[i, :, :])
+					return output
+				
+				#def Compute_L(input1, input2)
+
+
+
+		elif Hamiltonian_type == 'b':
 			num_macro_steps = 10
 			width = 50
 			n = 2
@@ -331,32 +397,40 @@ def main():
 ################################################################################
 # b Calculation
 ################################################################################
+		if Hamiltonian_type == 'b':
+			z_traj = tf.reshape(z_ph,[1,b,2*n]) 
+			# shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
+			z = z_ph
+			for m in range(num_macro_steps):
+				# First do G2
+				G1 = compute_G(G1u_list[m], G1b_list[m])
+				z = tf.matmul(z, G1)
 
-		z_traj = tf.reshape(z_ph,[1,b,2*n]) 
-		z = z_ph
-		# shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
-		for m in range(num_macro_steps):
-			# First do G2
-			G1 = compute_G(G1u_list[m], G1b_list[m])
-			z = tf.matmul(z, G1)
+				x = z[:,0:n]
+				y = z[:,n:2*n]
 
-			x = z[:,0:n]
-			y = z[:,n:2*n]
+				S = compute_S(y, Sk_list[m])
+				dy = tf.gradients(S, y)[0]
 
-			S = compute_S(y, Sk_list[m])
-			dy = tf.gradients(S, y)[0]
+				x = x + dy * dt
+				y = y
+				z = tf.concat([x,y], axis=1)
+				z_traj = tf.concat([z_traj, tf.reshape(z, [1,b,2*n])], axis=0)
 
-			x = x + dy * dt
-			y = y
-			z = tf.concat([x,y], axis=1)
-			z_traj = tf.concat([z_traj, tf.reshape(z, [1,b,2*n])], axis=0)
+				G2 = compute_G(G2u_list[m], G2b_list[m])
+				z = tf.matmul(z, G2)
+				z = z + Tc_list[m]
 
-			G2 = compute_G(G2u_list[m], G2b_list[m])
-			z = tf.matmul(z, G2)
-			z = z + Tc_list[m]
-
-			x = z[:,0:n]
-			y = z[:,n:2*n]
+				x = z[:,0:n]
+				y = z[:,n:2*n]
+		elif Hamiltonian_type == 'week 4':
+			z_traj = tf.reshape(z_ph,[1,b,2*n]) 
+			# shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
+			z = z_ph
+			x = z[:, 0:n]
+			for m in range(num_macro_steps):
+				print(x)
+				S = Compute_S(x, neural_list, inputM, outputM, 0)
 			
 
 			
@@ -477,7 +551,7 @@ def main():
 		# Geometric parameters
 		# The equation for the ellipsoid is (\pi * |z_1|^2 / aa) + (\pi * |z_2|^2 / bb) \leq 1
 		aa = 1.0
-		bb = 5.0
+		bb = 3.0
 
 		def F(z):
 			z1sq = z[:,0]**2 + z[:,2]**2
@@ -490,6 +564,10 @@ def main():
 			z_init = np.random.uniform(-5,5, [num_samples_per_epoch, 4]).astype(np.float32)
 			div_fact = np.sqrt(F(z_init).reshape([num_samples_per_epoch, 1]))
 			z_init = z_init/div_fact
+			print(z_init[:, 0])
+			print(z_init[:, 2])
+			print(z_init[:, 1])
+			print(z_init[:, 3])
 
 			return z_init
 
@@ -650,7 +728,7 @@ def main():
 				training_plot_line.set_data([0,enc_ar],[enc_ar,0])
 				training_plot_title.set_text('training step:' +str(gstep))
 
-				plt.pause(0.05)
+				plt.pause(5)
 				fig.show()
 
 			print('using num steps: %s, local step: %s, global step: %s, current_lr: %s, loss: %s, enclosing area: %s' %(num_micro_steps, step, gstep, current_lr, lss, enc_ar))
