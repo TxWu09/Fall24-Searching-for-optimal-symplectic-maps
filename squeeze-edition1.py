@@ -101,7 +101,8 @@ def main():
 			Sk_list = []
 			Sv_list = []
 			T_list = []
-			Lfg_neural_list = []
+			Lfg_neural_list_1 = []
+			Lfg_neural_list_2 = []
 			for i in range(num_macro_steps):
 				
 
@@ -122,12 +123,19 @@ def main():
 					# Lfg_list = []
 				outputM = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Sk + num_Sv, width, 2]), dtype=np.float32))
 
-				inputML = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [2*num_Lfg, 1, width]), dtype=np.float32))
-				outputML = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [2*num_Lfg, width, 1]), dtype=np.float32))
+				inputBiasL_1 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
+				inputML_1 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
+				outputML_1 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, width, 1]), dtype=np.float32))
+				inputBiasL_2 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
+				inputML_2 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
+				outputML_2 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, width, 1]), dtype=np.float32))
 				for j in range(depth - 1): 
-					w = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [2*num_Lfg, width, width]), dtype=np.float32))
-					Bias = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [2*num_Lfg, 1, width]), dtype=np.float32))
-					Lfg_neural_list.append([w, Bias])
+					w1 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, width, width]), dtype=np.float32))
+					Bias1 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
+					Lfg_neural_list_1.append([w1, Bias1])
+					w2 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, width, width]), dtype=np.float32))
+					Bias2 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
+					Lfg_neural_list_2.append([w2, Bias2])
 
 				T_list.append(c)
 
@@ -137,7 +145,7 @@ def main():
 					output = tf.add(I ,tf.multiply(b, tf.matmul(u, tf.matmul(tf.transpose(u), J))))
 					return output
 				
-				def Compute_S(input_place, neural_list, inputM, outputM, i):
+				def Compute_S(input_place, neural_list, inputM, outputM, i, inputBias):
 					input_place = activation(tf.add(inputBias[i, :, :], tf.matmul(input_place, inputM[i, :, :])))
 					for j in range(depth - 1):
 						w, Bias = neural_list[j]
@@ -147,7 +155,15 @@ def main():
 					output = tf.matmul(input_place, outputM[i, :, :])
 					return output
 				
-				#def Compute_L(input1, input2)
+				def Compute_L(input_place, Lfg_neural_list, inputML, outputML, i, inputBiasL):
+					input_place = activation(tf.add(inputBiasL[i, :, :], tf.matmul(input_place, inputML[i, :, :])))
+					for j in range(depth - 1):
+						w, Bias = Lfg_neural_list[j]
+						input_place = activation(tf.add(Bias[i, :, :], tf.matmul(input_place, w[i, :, :])))
+					output = tf.matmul(input_place, outputML[i, :, :])
+					return output
+				
+					
 
 
 
