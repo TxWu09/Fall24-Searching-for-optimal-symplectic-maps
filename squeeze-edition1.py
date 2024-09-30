@@ -30,7 +30,7 @@ def main():
 
 	# Gradient descent parameters
 	restore_session = False # Whether or not to recall the weights from the last training stage or re-initialize
-	num_epochs = 1 # Number of epochs per script call
+	num_epochs = 100 # Number of epochs per script call
 	current_lr = 0.001 # Initial learning rate
 	decay_steps = 500 # Number of training steps before we decay the learning rate
 	decay_rate = 0.5 # Decay factor of the learning rate
@@ -86,15 +86,13 @@ def main():
 
 
 		if Hamiltonian_type == 'Week 4':
-			depth = 2
-			num_macro_steps = 1
+			depth = 5
 			width = 2
 			num_G = 3
 			num_Sk = 1
 			num_Sv = 1
 			num_T = 1
 			num_Lfg = 1
-			n = 2
 			activation = tf.math.tanh
 			G_list = []
 			neural_list = []
@@ -107,7 +105,10 @@ def main():
 				
 
 				u= tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_G, 4, 1]), dtype=np.float32))
-				b= tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_G, 1]), dtype=np.float32))
+				const_b= tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_G, 1]), dtype=np.float32))
+				G_list.append([u, const_b])
+				# G_list[m][0][0,:,:]
+				# G_list[m][1][0,0]
 
 
 				c= tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_T, 1, 4]), dtype=np.float32))
@@ -139,13 +140,13 @@ def main():
 
 				T_list.append(c)
 
-				def Compute_G(u, b):
+				def compute_G(u, b):
 					I = tf.constant(np.identity(4), dtype=np.float32)
 					J = tf.constant([[0, 0, -1, 0], [0, 0, 0, -1], [1, 0, 0, 0], [0, 1, 0, 0]], dtype=np.float32)
 					output = tf.add(I ,tf.multiply(b, tf.matmul(u, tf.matmul(tf.transpose(u), J))))
 					return output
 				
-				def Compute_S(input_place, neural_list, inputM, outputM, i, inputBias):
+				def compute_S(input_place, neural_list, inputM, outputM, i, inputBias):
 					input_place = activation(tf.add(inputBias[i, :, :], tf.matmul(input_place, inputM[i, :, :])))
 					for j in range(depth - 1):
 						w, Bias = neural_list[j]
@@ -155,8 +156,8 @@ def main():
 					output = tf.matmul(input_place, outputM[i, :, :])
 					return output
 				
-				def Compute_L(input_place, Lfg_neural_list, inputML, outputML, i, inputBiasL):
-					input_place = activation(tf.add(inputBiasL[i, :, :], tf.matmul(input_place, inputML[i, :, :])))
+				def compute_L(input_place, Lfg_neural_list, inputML, outputML, i, inputBiasL):
+					input_place = activation(tf.add(inputBiasL[i, :, :], tf.multiply(input_place, inputML[i, :, :])))
 					for j in range(depth - 1):
 						w, Bias = Lfg_neural_list[j]
 						input_place = activation(tf.add(Bias[i, :, :], tf.matmul(input_place, w[i, :, :])))
@@ -414,6 +415,8 @@ def main():
 # b Calculation
 ################################################################################
 		if Hamiltonian_type == 'b':
+			print(tf.shape(z_ph))
+			print("b=",b)
 			z_traj = tf.reshape(z_ph,[1,b,2*n]) 
 			# shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
 			z = z_ph
@@ -439,14 +442,60 @@ def main():
 
 				x = z[:,0:n]
 				y = z[:,n:2*n]
-		elif Hamiltonian_type == 'week 4':
+
+
+
+		elif Hamiltonian_type == 'Week 4':
+			print(tf.shape(z_ph))
+			print(b)
 			z_traj = tf.reshape(z_ph,[1,b,2*n]) 
 			# shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
 			z = z_ph
-			x = z[:, 0:n]
 			for m in range(num_macro_steps):
-				print(x)
-				S = Compute_S(x, neural_list, inputM, outputM, 0)
+				G1 = compute_G(G_list[m][0][0,:,:], G_list[m][1][0, 0])
+				z = tf.matmul(z, G1)
+
+				x = z[:,0:n]
+				y = z[:,n:2*n]
+				
+
+				Sv1 = compute_S(x, neural_list, inputM, outputM, 0, inputBias)
+				dx = tf.gradients(Sv1, x)[0]
+				y = y - dx * dt
+				z = tf.concat([x,y], axis=1)
+
+				G2 = compute_G(G_list[m][0][1,:,:], G_list[m][1][1, 0])
+				z = tf.matmul(z, G2)
+
+				x1 = z[:, 0]
+				y2 = z[:, 2*n - 1]
+				print("x1= ",x1)
+
+				LF_x1 = compute_L(x1, Lfg_neural_list_1,inputML_1, outputML_1,0,inputBiasL_1)
+				LG_y2 = compute_L(y2, Lfg_neural_list_2,inputML_2, outputML_2,0,inputBiasL_2)
+
+				dLF_x1 = tf.gradients(LF_x1, x1)[0]
+				dLG_y2 = tf.gradients(LG_y2, y2)[0]
+				z[:, 1] = z[:, 1] - LG_y2 * dLF_x1
+				z[:, 2] = z[:, 2] + LF_x1 * dLG_y2
+
+				G3 = compute_G(G_list[m][0][2,:,:], G_list[m][1][2, 0])
+				z = tf.matmul(z, G3)
+
+				x = z[:,0:n]
+				y = z[:,n:2*n]
+
+				Sk1 = compute_S(y, neural_list, inputM, outputM, 1, inputBias)
+				dy = tf.gradients(Sv1, y)[0]
+				x = x + dy * dt
+				z = tf.concat([x,y], axis=1)
+
+				z = z + T_list[m][0,:,:]
+
+				x = z[:,0:n]
+				y = z[:,n:2*n]
+
+
 			
 
 			
