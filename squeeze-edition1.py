@@ -476,8 +476,12 @@ def main():
 
 				dLF_x1 = tf.gradients(LF_x1, x1)[0]
 				dLG_y2 = tf.gradients(LG_y2, y2)[0]
-				z[:, 1] = z[:, 1] - LG_y2 * dLF_x1
-				z[:, 2] = z[:, 2] + LF_x1 * dLG_y2
+				z0 = tf.squeeze(z[:, 0])
+				z1 = tf.squeeze(z[:, 1] - LG_y2 * dLF_x1)
+				z2 = tf.squeeze(z[:, 2] + LF_x1 * dLG_y2)
+				z3 = tf.squeeze(z[:, 3])
+				
+				z = tf.concat([z0,z1,z2,z3], axis = 1)
 
 				G3 = compute_G(G_list[m][0][2,:,:], G_list[m][1][2, 0])
 				z = tf.matmul(z, G3)
@@ -629,10 +633,7 @@ def main():
 			z_init = np.random.uniform(-5,5, [num_samples_per_epoch, 4]).astype(np.float32)
 			div_fact = np.sqrt(F(z_init).reshape([num_samples_per_epoch, 1]))
 			z_init = z_init/div_fact
-			print(z_init[:, 0])
-			print(z_init[:, 2])
-			print(z_init[:, 1])
-			print(z_init[:, 3])
+
 
 			return z_init
 
