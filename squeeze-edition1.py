@@ -30,11 +30,11 @@ def main():
 
 	# Gradient descent parameters
 	restore_session = False # Whether or not to recall the weights from the last training stage or re-initialize
-	num_epochs = 100 # Number of epochs per script call
+	num_epochs = 40 # Number of epochs per script call
 	current_lr = 0.001 # Initial learning rate
 	decay_steps = 500 # Number of training steps before we decay the learning rate
 	decay_rate = 0.5 # Decay factor of the learning rate
-	num_samples_per_epoch_basic = 10 # Number of random sample points to draw from the domain at each epoch
+	num_samples_per_epoch_basic = 15 # Number of random sample points to draw from the domain at each epoch
 	num_samples_per_epoch_check_accuracy = 5000 # Should be larger than num_samples_per_epoch_basic and is used to periodically assess the accuracy of the sampling process
 
 	# Time integration parameters
@@ -150,13 +150,16 @@ def main():
 					input_place = activation(tf.add(inputBias[i, :, :], tf.matmul(input_place, inputM[i, :, :])))
 					for j in range(depth - 1):
 						w, Bias = neural_list[j]
-						print(w)
-						print(Bias)
+						#print(w)
+						#print(Bias)
 						input_place = activation(tf.add(Bias[i, :, :], tf.matmul(input_place, w[i, :, :])))
 					output = tf.matmul(input_place, outputM[i, :, :])
 					return output
 				
 				def compute_L(input_place, Lfg_neural_list, inputML, outputML, i, inputBiasL):
+					#tf.reshape(input_place,[10,1])
+					print("input: ", input_place)
+					print("inputML: ", inputML[i, :, :])
 					input_place = activation(tf.add(inputBiasL[i, :, :], tf.multiply(input_place, inputML[i, :, :])))
 					for j in range(depth - 1):
 						w, Bias = Lfg_neural_list[j]
@@ -415,8 +418,8 @@ def main():
 # b Calculation
 ################################################################################
 		if Hamiltonian_type == 'b':
-			print(tf.shape(z_ph))
-			print("b=",b)
+			#print(tf.shape(z_ph))
+			#print("b=",b)
 			z_traj = tf.reshape(z_ph,[1,b,2*n]) 
 			# shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
 			z = z_ph
@@ -471,17 +474,19 @@ def main():
 				y2 = z[:, 2*n - 1]
 				print("x1= ",x1)
 
-				LF_x1 = compute_L(x1, Lfg_neural_list_1,inputML_1, outputML_1,0,inputBiasL_1)
-				LG_y2 = compute_L(y2, Lfg_neural_list_2,inputML_2, outputML_2,0,inputBiasL_2)
+				#Lfg
 
-				dLF_x1 = tf.gradients(LF_x1, x1)[0]
-				dLG_y2 = tf.gradients(LG_y2, y2)[0]
-				z0 = tf.squeeze(z[:, 0])
-				z1 = tf.squeeze(z[:, 1] - LG_y2 * dLF_x1)
-				z2 = tf.squeeze(z[:, 2] + LF_x1 * dLG_y2)
-				z3 = tf.squeeze(z[:, 3])
+				# LF_x1 = compute_L(x1, Lfg_neural_list_1,inputML_1, outputML_1,0,inputBiasL_1)
+				# LG_y2 = compute_L(y2, Lfg_neural_list_2,inputML_2, outputML_2,0,inputBiasL_2)
+
+				# dLF_x1 = tf.gradients(LF_x1, x1)[0]
+				# dLG_y2 = tf.gradients(LG_y2, y2)[0]
+				# z0 = tf.squeeze(z[:, 0])
+				# z1 = tf.squeeze(z[:, 1] - LG_y2 * dLF_x1)
+				# z2 = tf.squeeze(z[:, 2] + LF_x1 * dLG_y2)
+				# z3 = tf.squeeze(z[:, 3])
 				
-				z = tf.concat([z0,z1,z2,z3], axis = 1)
+				# z = tf.concat([z0,z1,z2,z3], axis = 1)
 
 				G3 = compute_G(G_list[m][0][2,:,:], G_list[m][1][2, 0])
 				z = tf.matmul(z, G3)
@@ -491,7 +496,7 @@ def main():
 
 				Sk1 = compute_S(y, neural_list, inputM, outputM, 1, inputBias)
 				dy = tf.gradients(Sk1, y)[0]
-				print("x ", x)
+				print("x ", tf.shape(x))
 				x = x + dy * dt
 				z = tf.concat([x,y], axis=1)
 
