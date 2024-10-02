@@ -490,7 +490,8 @@ def main():
 				y = z[:,n:2*n]
 
 				Sk1 = compute_S(y, neural_list, inputM, outputM, 1, inputBias)
-				dy = tf.gradients(Sv1, y)[0]
+				dy = tf.gradients(Sk1, y)[0]
+				print("x ", x)
 				x = x + dy * dt
 				z = tf.concat([x,y], axis=1)
 
