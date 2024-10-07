@@ -34,7 +34,7 @@ def main():
 	current_lr = 0.001 # Initial learning rate
 	decay_steps = 500 # Number of training steps before we decay the learning rate
 	decay_rate = 0.5 # Decay factor of the learning rate
-	num_samples_per_epoch_basic = 15 # Number of random sample points to draw from the domain at each epoch
+	num_samples_per_epoch_basic = 2 # Number of random sample points to draw from the domain at each epoch
 	num_samples_per_epoch_check_accuracy = 5000 # Should be larger than num_samples_per_epoch_basic and is used to periodically assess the accuracy of the sampling process
 
 	# Time integration parameters
@@ -99,8 +99,8 @@ def main():
 			Sk_list = []
 			Sv_list = []
 			T_list = []
-			Lfg_neural_list_1 = []
-			Lfg_neural_list_2 = []
+			Lfg_neural_list_x = []
+			Lfg_neural_list_y = []
 			for i in range(num_macro_steps):
 				
 
@@ -124,19 +124,22 @@ def main():
 					# Lfg_list = []
 				outputM = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Sk + num_Sv, width, 2]), dtype=np.float32))
 
-				inputBiasL_1 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
-				inputML_1 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
-				outputML_1 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, width, 1]), dtype=np.float32))
-				inputBiasL_2 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
-				inputML_2 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
-				outputML_2 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, width, 1]), dtype=np.float32))
+				zero_matrix = tf.constant(np.full((1, width), 0, dtype=np.float32))
+
+				inputBiasL_x = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
+				inputML_x = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
+				outputML_x = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, width, 2]), dtype=np.float32))
+
+				inputBiasL_y = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
+				inputML_y = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
+				outputML_y = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, width, 2]), dtype=np.float32))
 				for j in range(depth - 1): 
 					w1 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, width, width]), dtype=np.float32))
 					Bias1 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
-					Lfg_neural_list_1.append([w1, Bias1])
+					Lfg_neural_list_x.append([w1, Bias1])
 					w2 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, width, width]), dtype=np.float32))
 					Bias2 = tf.Variable(np.array(np.random.normal(scale = 0.1, size = [num_Lfg, 1, width]), dtype=np.float32))
-					Lfg_neural_list_2.append([w2, Bias2])
+					Lfg_neural_list_y.append([w2, Bias2])
 
 				T_list.append(c)
 
@@ -156,11 +159,14 @@ def main():
 					output = tf.matmul(input_place, outputM[i, :, :])
 					return output
 				
-				def compute_L(input_place, Lfg_neural_list, inputML, outputML, i, inputBiasL):
+				def compute_L(input_place, Lfg_neural_list, inputML, outputML, i, inputBiasL, type):
 					#tf.reshape(input_place,[10,1])
-					print("input: ", input_place)
-					print("inputML: ", inputML[i, :, :])
-					input_place = activation(tf.add(inputBiasL[i, :, :], tf.multiply(input_place, inputML[i, :, :])))
+					# print("input: ", input_place)
+					# print("inputML: ", inputML[i, :, :])
+					if type == 'x':
+						input_place = activation(tf.add(inputBiasL[i, :, :], tf.matmul(input_place, tf.concat([inputML[i, :, :], zero_matrix], 0))))
+					elif type == 'y':
+						input_place = activation(tf.add(inputBiasL[i, :, :], tf.matmul(input_place, tf.concat([zero_matrix, inputML[i, :, :]], 0))))
 					for j in range(depth - 1):
 						w, Bias = Lfg_neural_list[j]
 						input_place = activation(tf.add(Bias[i, :, :], tf.matmul(input_place, w[i, :, :])))
@@ -470,23 +476,25 @@ def main():
 				G2 = compute_G(G_list[m][0][1,:,:], G_list[m][1][1, 0])
 				z = tf.matmul(z, G2)
 
-				x1 = z[:, 0]
-				y2 = z[:, 2*n - 1]
-				print("x1= ",x1)
+				x = z[:,0:n]
+				y = z[:,n:2*n]
+				#print("x1= ",x1)
 
 				#Lfg
 
-				# LF_x1 = compute_L(x1, Lfg_neural_list_1,inputML_1, outputML_1,0,inputBiasL_1)
-				# LG_y2 = compute_L(y2, Lfg_neural_list_2,inputML_2, outputML_2,0,inputBiasL_2)
+				LF_x = compute_L(x, Lfg_neural_list_x,inputML_x, outputML_x,0,inputBiasL_x, 'x')
+				LG_y = compute_L(y, Lfg_neural_list_y,inputML_y, outputML_y,0,inputBiasL_y, 'y')
 
-				# dLF_x1 = tf.gradients(LF_x1, x1)[0]
-				# dLG_y2 = tf.gradients(LG_y2, y2)[0]
-				# z0 = tf.squeeze(z[:, 0])
-				# z1 = tf.squeeze(z[:, 1] - LG_y2 * dLF_x1)
-				# z2 = tf.squeeze(z[:, 2] + LF_x1 * dLG_y2)
-				# z3 = tf.squeeze(z[:, 3])
+				dLF_x = tf.gradients(LF_x, x)[0]
+				dLG_y = tf.gradients(LG_y, y)[0]
+				with tf.Session() as sess:
+					print(sess.run(tf.gradients(LF_x, x)))
+					print(sess.run(tf.gradients(LG_y, y)))
+
+				y = y + dLF_x * dt
+				x = x - dLG_y * dt
+				z = tf.concat([x,y], axis=1)
 				
-				# z = tf.concat([z0,z1,z2,z3], axis = 1)
 
 				G3 = compute_G(G_list[m][0][2,:,:], G_list[m][1][2, 0])
 				z = tf.matmul(z, G3)
