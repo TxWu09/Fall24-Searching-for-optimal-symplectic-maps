@@ -30,12 +30,12 @@ def main():
 
 	# Gradient descent parameters
 	restore_session = False # Whether or not to recall the weights from the last training stage or re-initialize
-	num_epochs = 40 # Number of epochs per script call
+	num_epochs = 1000 # Number of epochs per script call
 	current_lr = 0.001 # Initial learning rate
 	decay_steps = 500 # Number of training steps before we decay the learning rate
 	decay_rate = 0.5 # Decay factor of the learning rate
-	num_samples_per_epoch_basic = 2 # Number of random sample points to draw from the domain at each epoch
-	num_samples_per_epoch_check_accuracy = 5000 # Should be larger than num_samples_per_epoch_basic and is used to periodically assess the accuracy of the sampling process
+	num_samples_per_epoch_basic = 1000 # Number of random sample points to draw from the domain at each epoch
+	num_samples_per_epoch_check_accuracy = 50 # Should be larger than num_samples_per_epoch_basic and is used to periodically assess the accuracy of the sampling process
 
 	# Time integration parameters
 	num_micro_steps = 1 # Number of numerical integration steps for each time discretization of the (time-dependent) Hamiltonian
@@ -52,7 +52,7 @@ def main():
 	write_steps = 5 # After how many epochs to write summary to tensorboard
 	
 	# Training plot parameters
-	show_training_plot = True
+	show_training_plot = False
 	num_samples_per_epoch_training_plot = num_samples_per_epoch_basic # How many samples to plot
 	update_training_plot_live_steps = 5 # After how many epochs to update the training plot if displaying in real time
 	update_training_plot_save_steps = 5 #How often we update the training plot for save purposes.
@@ -455,14 +455,16 @@ def main():
 
 
 		elif Hamiltonian_type == 'Week 4':
-			print(tf.shape(z_ph))
-			print(b)
+			x = z_ph[:,0:n]
+			y = z_ph[:,n:2*n]
 			z_traj = tf.reshape(z_ph,[1,b,2*n]) 
-			# shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
+			shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
 			z = z_ph
 			for m in range(num_macro_steps):
 				G1 = compute_G(G_list[m][0][0,:,:], G_list[m][1][0, 0])
 				z = tf.matmul(z, G1)
+				
+	
 
 				x = z[:,0:n]
 				y = z[:,n:2*n]
@@ -472,46 +474,113 @@ def main():
 				dx = tf.gradients(Sv1, x)[0]
 				y = y - dx * dt
 				z = tf.concat([x,y], axis=1)
+				
 
 				G2 = compute_G(G_list[m][0][1,:,:], G_list[m][1][1, 0])
 				z = tf.matmul(z, G2)
+				
 
-				x = z[:,0:n]
-				y = z[:,n:2*n]
+				x_t = z[:,0:n]
+				y_t = z[:,n:2*n]
 				#print("x1= ",x1)
 
 				#Lfg
 
-				LF_x = compute_L(x, Lfg_neural_list_x,inputML_x, outputML_x,0,inputBiasL_x, 'x')
-				LG_y = compute_L(y, Lfg_neural_list_y,inputML_y, outputML_y,0,inputBiasL_y, 'y')
+				LF_x = compute_L(x_t, Lfg_neural_list_x,inputML_x, outputML_x,0,inputBiasL_x, 'x')
+				LG_y = compute_L(y_t, Lfg_neural_list_y,inputML_y, outputML_y,0,inputBiasL_y, 'y')
 
-				dLF_x = tf.gradients(LF_x, x)[0]
-				dLG_y = tf.gradients(LG_y, y)[0]
-				with tf.Session() as sess:
-					print(sess.run(tf.gradients(LF_x, x)))
-					print(sess.run(tf.gradients(LG_y, y)))
+				dLF_x = tf.gradients(LF_x, x_t)[0]
+				dLG_y = tf.gradients(LG_y, y_t)[0]
 
-				y = y + dLF_x * dt
-				x = x - dLG_y * dt
+				y = y_t + dLF_x * dt
+				x = x_t - dLG_y * dt
 				z = tf.concat([x,y], axis=1)
+				
 				
 
 				G3 = compute_G(G_list[m][0][2,:,:], G_list[m][1][2, 0])
 				z = tf.matmul(z, G3)
+				
 
 				x = z[:,0:n]
 				y = z[:,n:2*n]
 
 				Sk1 = compute_S(y, neural_list, inputM, outputM, 1, inputBias)
 				dy = tf.gradients(Sk1, y)[0]
-				print("x ", tf.shape(x))
 				x = x + dy * dt
 				z = tf.concat([x,y], axis=1)
 
 				z = z + T_list[m][0,:,:]
+				z_traj = tf.concat([z_traj, tf.reshape(z, [1,b,2*n])], axis=0)
 
 				x = z[:,0:n]
 				y = z[:,n:2*n]
+
+				while_condition = lambda ctr, x, y, z_traj: tf.less(ctr, num_steps_ph-1)
+				def body(ctr, x, y, z_traj):
+					z = tf.concat([x,y], axis=1)
+					G1 = compute_G(G_list[m][0][0,:,:], G_list[m][1][0, 0])
+					z = tf.matmul(z, G1)
+					
+		
+
+					x = z[:,0:n]
+					y = z[:,n:2*n]
+					
+
+					Sv1 = compute_S(x, neural_list, inputM, outputM, 0, inputBias)
+					dx = tf.gradients(Sv1, x)[0]
+					y = y - dx * dt
+					z = tf.concat([x,y], axis=1)
+				
+
+					G2 = compute_G(G_list[m][0][1,:,:], G_list[m][1][1, 0])
+					z = tf.matmul(z, G2)
+					
+
+					x_t = z[:,0:n]
+					y_t = z[:,n:2*n]
+					#print("x1= ",x1)
+
+					#Lfg
+
+					LF_x = compute_L(x_t, Lfg_neural_list_x,inputML_x, outputML_x,0,inputBiasL_x, 'x')
+					LG_y = compute_L(y_t, Lfg_neural_list_y,inputML_y, outputML_y,0,inputBiasL_y, 'y')
+
+					dLF_x = tf.gradients(LF_x, x_t)[0]
+					dLG_y = tf.gradients(LG_y, y_t)[0]
+
+					y = y_t + dLF_x * dt
+					x = x_t - dLG_y * dt
+					z = tf.concat([x,y], axis=1)
+					
+					
+
+					G3 = compute_G(G_list[m][0][2,:,:], G_list[m][1][2, 0])
+					z = tf.matmul(z, G3)
+					
+
+					x = z[:,0:n]
+					y = z[:,n:2*n]
+
+					Sk1 = compute_S(y, neural_list, inputM, outputM, 1, inputBias)
+					dy = tf.gradients(Sk1, y)[0]
+					x = x + dy * dt
+					z = tf.concat([x,y], axis=1)
+					
+
+					# z = z + T_list[m][0,:,:]
+					z_traj = tf.concat([z_traj, tf.reshape(z, [1,b,2*n])], axis=0)
+
+					x = z[:,0:n]
+					y = z[:,n:2*n]
+					
+					return ctr+1, x, y, z_traj
+				
+				_,x,y,z_traj = tf.while_loop(while_condition,body, [0,x,y,z_traj], shape_invariants)
+
+
+
 
 
 			
@@ -523,66 +592,66 @@ def main():
 ################################################################################
 # Leapfrog integration
 ################################################################################
+		elif Hamiltonian_type == 'neural net':
+			x = z_ph[:,0:n]
+			y = z_ph[:,n:2*n]
+			z_traj = tf.reshape(z_ph,[1,b,2*n]) 
+			shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
 
-		# x = z_ph[:,0:n]
-		# y = z_ph[:,n:2*n]
-		# z_traj = tf.reshape(z_ph,[1,b,2*n]) 
-		# shape_invariants = [tf.constant(0).get_shape(), x.get_shape(), y.get_shape(), tf.TensorShape([None,None,2*n])]
+			for m in range(num_macro_steps):
 
-		# for m in range(num_macro_steps):
+				# First we increment x a half step forward, leaving y alone
+				G = compute_G(y, G_weights_list[m])
+				dG_y = tf.gradients(G, y)[0]
 
-		# 	# First we increment x a half step forward, leaving y alone
-		# 	G = compute_G(y, G_weights_list[m])
-		# 	dG_y = tf.gradients(G, y)[0]
+				x = x + dG_y * 0.5 * dt
+				y = y
 
-		# 	x = x + dG_y * 0.5 * dt
-		# 	y = y
+				z = tf.concat([x,y], axis=1)
+				z_traj = tf.concat([z_traj, tf.reshape(z, [1,b,2*n])], axis=0)
 
-		# 	z = tf.concat([x,y], axis=1)
-		# 	z_traj = tf.concat([z_traj, tf.reshape(z, [1,b,2*n])], axis=0)
+				# Next we increment y a full step, and then x a full step, and we repeat this num_steps_ph-1 times
+				while_condition = lambda ctr, x, y, z_traj: tf.less(ctr, num_steps_ph-1) 
+				def body(ctr, x, y, z_traj):
 
-		# 	# Next we increment y a full step, and then x a full step, and we repeat this num_steps_ph-1 times
-		# 	while_condition = lambda ctr, x, y, z_traj: tf.less(ctr, num_steps_ph-1) 
-		# 	def body(ctr, x, y, z_traj):
+					# z = tf.concat([x,y], axis=1) # shape [b,2*n]	
+					F = compute_F(x, F_weights_list[m])
+					dF_x = tf.gradients(F, x)[0]
 
-		# 		# z = tf.concat([x,y], axis=1) # shape [b,2*n]	
-		# 		F = compute_F(x, F_weights_list[m])
-		# 		dF_x = tf.gradients(F, x)[0]
+					# Increment y by a full step:
+					x = x
+					y = y - dF_x * dt
 
-		# 		# Increment y by a full step:
-		# 		x = x
-		# 		y = y - dF_x * dt
+					G = compute_G(y, G_weights_list[m])
+					dG_y = tf.gradients(G, y)[0]			
 
-		# 		G = compute_G(y, G_weights_list[m])
-		# 		dG_y = tf.gradients(G, y)[0]			
+					# Increment x by a full step:
+					x = y + dG_y * dt
+					x = x
 
-		# 		# Increment x by a full step:
-		# 		x = y + dG_y * dt
-		# 		x = x
+					z = tf.concat([x,y], axis=1)
+					z_traj = tf.concat([z_traj,tf.reshape(z, [1,b,2*n])], axis=0)
 
-		# 		z = tf.concat([x,y], axis=1)
-		# 		z_traj = tf.concat([z_traj,tf.reshape(z, [1,b,2*n])], axis=0)
+					return ctr+1, x, y, z_traj	
 
-		# 		return ctr+1, x, y, z_traj	
+				_,x,y,z_traj = tf.while_loop(while_condition,body, [0,x,y,z_traj], shape_invariants)
 
-		# 	_,x,y,z_traj = tf.while_loop(while_condition,body, [0,x,y,z_traj], shape_invariants)
+				# Finally, we increment y one more full step, and then x one more half step
+				
+				# Increment y by a full step
+				F = compute_F(x, F_weights_list[m])
+				dF_x = tf.gradients(F, x)[0]
+				x = x
+				y = y - dF_x * dt
 
-		# 	# Finally, we increment y one more full step, and then x one more half step
-			
-		# 	# Increment y by a full step
-		# 	F = compute_F(x, F_weights_list[m])
-		# 	dF_x = tf.gradients(F, x)[0]
-		# 	x = x
-		# 	y = y - dF_x * dt
+				# Increment x by a half step
+				G = compute_G(y, G_weights_list[m])
+				dG_y = tf.gradients(G, y)[0]
+				x = x + dG_y * 0.5 * dt
+				y = y
 
-		# 	# Increment x by a half step
-		# 	G = compute_G(y, G_weights_list[m])
-		# 	dG_y = tf.gradients(G, y)[0]
-		# 	x = x + dG_y * 0.5 * dt
-		# 	y = y
-
-		# 	z = tf.concat([x,y], axis=1)
-		# 	z_traj = tf.concat([z_traj, tf.reshape(z, [1,b,2*n])], axis=0)
+				z = tf.concat([x,y], axis=1)
+				z_traj = tf.concat([z_traj, tf.reshape(z, [1,b,2*n])], axis=0)
 
 		# 	# Note: currently z_traj is pretty screwed up since it sometimes updates by a half step and sometimes by a full step
 
@@ -647,6 +716,8 @@ def main():
 			z_init = np.random.uniform(-5,5, [num_samples_per_epoch, 4]).astype(np.float32)
 			div_fact = np.sqrt(F(z_init).reshape([num_samples_per_epoch, 1]))
 			z_init = z_init/div_fact
+
+			
 
 
 			return z_init
@@ -775,7 +846,7 @@ def main():
 		if show_training_plot == True:
 
 			fig = plt.figure()
-			ax = fig.add_subplot(111,autoscale_on=False,xlim=(-0.5, 2), ylim=(-0.5, 2))
+			ax = fig.add_subplot(111,autoscale_on=False,xlim=(0, 2), ylim=(0, 2))
 			fig.show()
 
 			training_plot_points = []
@@ -789,6 +860,8 @@ def main():
 			training_plot_title = ax.text(1.5,1.5,'')
 
 		for step in range(num_epochs):
+
+
 
 			_,current_lst_z,lss,enc_ar,gstep,summary = sess.run([optimizer, last_z, loss, enclosing_area, global_step,merged],{z_ph:get_z_init(), lr_ph:current_lr, num_steps_ph:num_micro_steps})	
 		
@@ -808,7 +881,7 @@ def main():
 				training_plot_line.set_data([0,enc_ar],[enc_ar,0])
 				training_plot_title.set_text('training step:' +str(gstep))
 
-				plt.pause(5)
+				plt.pause(0.005)
 				fig.show()
 
 			print('using num steps: %s, local step: %s, global step: %s, current_lr: %s, loss: %s, enclosing area: %s' %(num_micro_steps, step, gstep, current_lr, lss, enc_ar))
@@ -843,12 +916,12 @@ def main():
 	toc = time.time()
 	print('Total time elapsed: %s' %(toc-tic))
 
-	trj_name = 'trj_run' + str(run_num) + '.npy'
+	trj_name = 'trj_run_492' + str(run_num) + '.npy'
 	np.save(trj_name,trj)
 	print('saved ' + trj_name + ' (this is the flow for the time dependent Hamiltonian found at the end of training)')
 
 	trn = np.array(training_plot_points_list)
-	trn_name = 'trn_run' + str(run_num) + '.npy'
+	trn_name = 'trn_run_492' + str(run_num) + '.npy'
 	np.save(trn_name,trn)
 	print('saved ' + trn_name + ' (this is the current best embedding as a function of training time)')	
 	print('note: trn.npy only records the training progress every %s steps' %update_training_plot_save_steps)
